@@ -183,6 +183,8 @@ nav button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
 .btn[disabled]{opacity:.45;cursor:default}
 .empty{background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:16px;color:var(--mute)}
 .bw{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bw input{width:96px}
+.chip .cdel{margin-left:6px;border:0;background:none;color:var(--mute);font-size:16px;padding:0 2px;cursor:pointer}
 .bw input{max-width:90px;flex:none;min-width:0}
 .foot{font-size:12px;color:var(--mute);text-align:center}
 
@@ -512,6 +514,7 @@ function adopt(d){
   if(s.draft&&!s.draft.meta&&(s.draft.sets.length||Object.keys(s.draft.wip||{}).length))s.draft.meta={d:today(),name:"Séance",prog:"all"};
   if(s.draft&&s.draft.meta===undefined)s.draft.meta=null;
   if(typeof d.bw==="number")s.bw=d.bw;
+  if(Array.isArray(d.bwh))s.bwh=d.bwh.filter(function(x){return x&&typeof x.d==="string"&&typeof x.kg==="number"});
   if(typeof d.prs==="number")s.prs=d.prs;
   if(typeof d.goal==="number"&&d.goal>=1&&d.goal<=7)s.goal=d.goal;
   if(d.goals&&typeof d.goals==='object'&&!Array.isArray(d.goals))s.goals=d.goals;
@@ -527,7 +530,7 @@ function adopt(d){
   return s;
 }
 (function init(){
-  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"05/11 00:18";afterLoad();render();
+  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"10/11 14:41";afterLoad();render();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 })();
 
@@ -800,7 +803,29 @@ function addMachine(){
 }
 function setBw(){
   var v=parseFloat(String(document.getElementById("bw").value).replace(",","."));
-  if(v>20&&v<300){S.bw=v;save();render()}
+  if(v>20&&v<300){
+    S.bw=v;if(!S.bwh)S.bwh=[];var td=today(),e=S.bwh.filter(function(x){return x.d===td})[0];
+    if(e)e.kg=v;else S.bwh.push({d:td,kg:v});
+    S.bwh.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0});
+    save();render();toast("Pesée enregistrée : "+fmt(v)+" kg");
+  }
+}
+function bwTrend(){
+  var h=S.bwh||[];if(h.length<2)return null;
+  var last=h[h.length-1],from=addDays(last.d,-28),base=null;
+  for(var i=0;i<h.length-1;i++){if(h[i].d>=from){base=h[i];break}}
+  if(!base)base=h[h.length-2];
+  var days=Math.round((new Date(last.d+"T12:00:00")-new Date(base.d+"T12:00:00"))/864e5);
+  return {diff:Math.round((last.kg-base.kg)*10)/10,days:days,since:base.d};
+}
+function bwHtml(){
+  var h=S.bwh||[],tr=bwTrend(),last=h[h.length-1];
+  var info=!h.length?'<p class="cap" style="margin:0">Enregistre une pesée par semaine, le matin à jeun : la courbe apparaîtra ici.</p>':
+    '<div class="xpline"><span>Dernière pesée : '+fmt(last.kg)+' kg le '+dshort(last.d)+'</span>'+(tr?'<span>'+(tr.diff>0?'+':'')+fmt(tr.diff)+' kg en '+tr.days+' j</span>':'')+'</div>';
+  var ch=h.length>=2?'<div class="chartbox">'+chartSvg(h.map(function(x){return {d:x.d,a:x.kg}}),"a","Poids (kg)",fmt)+'</div>':'';
+  var chips=h.length?'<div class="chips">'+h.slice(-6).reverse().map(function(x){return '<span class="chip">'+dshort(x.d)+' · '+fmt(x.kg)+' kg<button class="cdel" data-a="bwdel" data-d="'+x.d+'" aria-label="Supprimer la pesée du '+dshort(x.d)+'">×</button></span>'}).join("")+'</div>':'';
+  return '<section class="card" aria-label="Poids de corps"><span class="label">Poids de corps</span>'+
+    '<div class="bw"><input id="bw" inputmode="decimal" aria-label="Poids de corps en kg" value="'+fmt(S.bw)+'"><span>kg</span><button class="btn ghost" data-a="bw">Enregistrer</button></div>'+info+ch+chips+'</section>';
 }
 
 /* ---------- vues ---------- */
@@ -1020,7 +1045,7 @@ function progresHtml(){
   }).join("");
   var nA=Object.keys(achIds()).length;
   return '<button class="btn gold gb" data-a="achopen"><svg class="trophy" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="tgd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3b0"/><stop offset=".5" stop-color="#ffc928"/><stop offset="1" stop-color="#d98c00"/></linearGradient></defs><g stroke="#3a2600" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M9 8H4.5c0 5 1.8 7.4 5.2 8" fill="none"/><path d="M23 8h4.5c0 5-1.8 7.4-5.2 8" fill="none"/><path d="M9 4h14v7.5a7 7 0 0 1-14 0z" fill="url(#tgd)"/><path d="M14 18.5h4V23h-4z" fill="url(#tgd)"/><path d="M10.5 23h11l1.5 5h-14z" fill="url(#tgd)"/></g><path d="M16 7.2l1.3 2.7 2.9.4-2.1 2 .5 2.9-2.6-1.4-2.6 1.4.5-2.9-2.1-2 2.9-.4z" fill="#fff" stroke="#3a2600" stroke-width="1" stroke-linejoin="round"/><path d="M27.5 2.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7zM3.5 14l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5z" fill="#fff" stroke="#3a2600" stroke-width=".6" stroke-linejoin="round"/></svg>Succès · '+nA+' / '+ACH.length+'</button><h2>Records par machine</h2><div class="list">'+cards+'</div>'+
-    '<div class="bw"><label for="bw" class="label">Poids de corps (kg)</label><input id="bw" inputmode="decimal" value="'+fmt(S.bw)+'"><button class="btn ghost" data-a="bw">OK</button></div>'+'<button class="btn ghost gb2" data-a="bkopen"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Sauvegarde et partage</button>';
+    bwHtml()+'<button class="btn ghost gb2" data-a="bkopen"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Sauvegarde et partage</button>';
 }
 function vol(sets){return sets.reduce(function(a,x){return a+(isT(x)?0:x.w*x.r)},0)}
 function totT(sets){return sets.reduce(function(a,x){return a+(isT(x)?x.t:0)},0)}
@@ -1163,7 +1188,7 @@ function claudeText(n){
 function aiSummary(se){
   var L=["Analyse cette séance de musculation (app Reps). Dis-moi ce qui s'est bien passé, les points d'attention (douleurs, reps qui chutent, ressenti bas, charge trop haute) et les charges à viser à la prochaine séance. Sois concis.",
     "Légende : charges en kg, ressenti de 1 (très dur) à 5 (excellent), ★ = record.",
-    "Poids de corps : "+fmt(S.bw)+" kg. Objectifs : prendre du muscle et de la force, préparer un 30 km de course en mars.",""];
+    "Poids de corps : "+fmt(S.bw)+" kg"+(function(){var t=bwTrend();return t?" ("+(t.diff>0?"+":"")+fmt(t.diff)+" kg en "+t.days+" jours)":""})()+". Objectifs : prendre du muscle et de la force, préparer un 30 km de course en mars.",""];
   L.push("Séance du "+se.d+(se.name?" ("+se.name+")":""));
   groups(se.sets).forEach(function(g){
     var m=mach(g.id),rt=se.rates&&se.rates[g.id],prev=null,gw=isWU(g.items[0].x,se.sets);
@@ -1521,6 +1546,7 @@ function act(el){
   else if(a==="dai"){var ase=det&&sess(det.id);if(ase)copyPlain(aiSummary(ase),"Résumé copié, colle-le dans Claude")}
   else if(a==="wutog"){var wv=el.getAttribute("data-v")==="1";if(!S.draft.wu)S.draft.wu={};S.draft.wu[sh.id]=wv;S.draft.sets.forEach(function(x){if(x.m===sh.id){x.wu=wv;if(wv)x.pr=false}});save();if(!(S.draft.wip[sh.id]&&S.draft.wip[sh.id].length))openSheet(sh.id);else render()}
   else if(a==="dwu"){var wse=det&&sess(det.id);if(wse){var wid=el.getAttribute("data-id"),wv2=el.getAttribute("data-v")==="1";wse.sets.forEach(function(x){if(x.m===wid){x.wu=wv2;if(wv2)x.pr=false}});save();render()}}
+  else if(a==="bwdel"){var bd=el.getAttribute("data-d");S.bwh=(S.bwh||[]).filter(function(x){return x.d!==bd});if(S.bwh.length)S.bw=S.bwh[S.bwh.length-1].kg;save();render()}
   else if(a==="drate"){var rse=det&&sess(det.id);if(rse){var rid=el.getAttribute("data-id"),rv=+el.getAttribute("data-v");if(!rse.rates)rse.rates={};if(rse.rates[rid]===rv)delete rse.rates[rid];else rse.rates[rid]=rv;save();render()}}
   else if(a==="rate"){var v=+el.getAttribute("data-v"),gained=false;if(S.draft.rates[sh.id]===v)delete S.draft.rates[sh.id];else{S.draft.rates[sh.id]=v;if(!S.draft.rxp)S.draft.rxp={};if(!S.draft.rxp[sh.id]){S.draft.rxp[sh.id]=1;S.draft.xp=(S.draft.xp||0)+5;gained=true}}save();render();if(gained)toast("+5 XP · ressenti noté")}
   else if(a==="addrow")addRow();
