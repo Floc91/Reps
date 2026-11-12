@@ -356,6 +356,17 @@ var PROG={mon:["press","curl","ext","abd","add","calf","plank","rower"],wed:["ru
 var nw={tpl:"all",name:"",d:null}, discardAsk=false;
 var popN=false,popM=false,popP=false,mEd=null,pEd=null,nameDraft="",pdelAsk=false,mdelAsk=false;
 var DAYS=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"],DAYS3=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"],LEGDAYS={p_mon:[1],p_tue:[2],p_wed:[3],p_thu:[4]};
+function migrateWeek(s){
+  if(s.progv>=2||!Array.isArray(s.progs))return;
+  var P={};s.progs.forEach(function(p){P[p.id]=p});
+  var have={};(s.machines||[]).forEach(function(m){if(!m.hidden)have[m.id]=1});
+  if(P.p_wed&&P.p_wed.name==="Cardio"&&P.p_thu&&P.p_thu.name==="Full body"&&P.p_tue&&P.p_mon){
+    P.p_wed.name="Bas + cardio";
+    P.p_wed.machines=["press","curl","ext","add","abd","calf","run","plank"].filter(function(k){return have[k]});
+    P.p_wed.days=[3];P.p_tue.days=[2,4];P.p_mon.days=[1];P.p_thu.days=[];
+  }
+  s.progv=2;
+}
 function legacyProgs(){return [
   {id:"p_mon",name:"Bas",days:[1],machines:PROG.mon.slice()},{id:"p_tue",name:"Haut",days:[2],machines:PROG.tue.slice()},
   {id:"p_wed",name:"Cardio",days:[3],machines:PROG.wed.slice()},{id:"p_thu",name:"Full body",days:[4],machines:PROG.thu.slice()},
@@ -517,6 +528,7 @@ function adopt(d){
   if(Array.isArray(d.bwh))s.bwh=d.bwh.filter(function(x){return x&&typeof x.d==="string"&&typeof x.kg==="number"});
   if(typeof d.prs==="number")s.prs=d.prs;
   if(typeof d.goal==="number"&&d.goal>=1&&d.goal<=7)s.goal=d.goal;
+  if(d.progv)s.progv=d.progv;
   if(d.goals&&typeof d.goals==='object'&&!Array.isArray(d.goals))s.goals=d.goals;
   if(typeof d.bsee==='number')s.bsee=d.bsee;
   if(Array.isArray(d.off))s.off=d.off.filter(function(x){return typeof x==="string"});
@@ -525,12 +537,12 @@ function adopt(d){
   if(Array.isArray(d.progs))s.progs=d.progs.filter(function(p){return p&&typeof p.name==="string"&&Array.isArray(p.machines)}).map(function(p){return {id:String(p.id||"p"+Math.random().toString(36).slice(2,8)),name:p.name.slice(0,40),days:Array.isArray(p.days)?p.days.filter(function(x){return x>=0&&x<=6}):(LEGDAYS[p.id]||[]),machines:p.machines.filter(function(x){return typeof x==="string"})}});
   else if((Array.isArray(d.machines)&&d.machines.length)||(Array.isArray(d.sessions)&&d.sessions.length))s.progs=legacyProgs();
   var exm={};s.machines.forEach(function(m){exm[m.id]=1});s.progs.forEach(function(p){p.machines=p.machines.filter(function(x){return exm[x]})});
-  ensureSeed(s);renameHaut(s);
+  ensureSeed(s);renameHaut(s);migrateWeek(s);
   s.sessions.forEach(function(x){if(!x.rx){var n=x.rates?Object.keys(x.rates).length:0;if(n)x.xp=(x.xp||0)+5*n;x.rx=1}});
   return s;
 }
 (function init(){
-  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"10/11 14:41";afterLoad();render();
+  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"12/11 19:39";afterLoad();render();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 })();
 
@@ -539,10 +551,11 @@ function e1(w,r){return w*(1+r/30)}
 function kindOf(id){var m=mach(id);return (m&&m.kind)||"w"}
 function isT(x){return x.t!=null}
 function isCardioM(id){return kindOf(id)==="d"}
-function isWU(x,sets){return isCardioM(x.m)&&(x.wu!=null?!!x.wu:sets.some(function(y){return !isT(y)}))}
+function isWU(x,sets){return isCardioM(x.m)&&(x.wu!=null?!!x.wu:((x.t||0)<900&&sets.some(function(y){return !isT(y)})))}
 function draftWU(id){
   if(!isCardioM(id))return false;
   if(S.draft.wu&&S.draft.wu[id]!=null)return !!S.draft.wu[id];
+  if(S.draft.meta&&/cardio/i.test(S.draft.meta.name||""))return false;
   return S.draft.sets.some(function(y){return !isT(y)})||selIds().some(function(k){return kindOf(k)==="w"});
 }
 function stepW(w,d){
@@ -991,7 +1004,7 @@ var ACH=[
  {id:"r5",cat:"Course",ic:"5k",name:"Les 5 bornes",desc:"5 km en une sortie.",ev:function(C){return aBest(C,kmOf("run"),5)}},
  {id:"r10",cat:"Course",ic:"10k",name:"Double digit",desc:"10 km en une sortie.",ev:function(C){return aBest(C,kmOf("run"),10)}},
  {id:"r21",cat:"Course",ic:"21k",name:"Semi-conquérant",desc:"21,1 km en une sortie.",ev:function(C){return aBest(C,kmOf("run"),21.1)}},
- {id:"r30",cat:"Course",ic:"30k",name:"Le Mur des 30",desc:"30 km en une sortie. Le boss de ton objectif de mars.",ev:function(C){return aBest(C,kmOf("run"),30)}},
+ {id:"r30",cat:"Course",ic:"30k",name:"Le Mur des 30",desc:"30 km en une seule sortie. Le défi ultime de la course.",ev:function(C){return aBest(C,kmOf("run"),30)}},
  {id:"r42",cat:"Course",ic:"42k",name:"Marathonien",desc:"42,2 km en une sortie. La suite, dans un an.",ev:function(C){return aBest(C,kmOf("run"),42.2)}},
  {id:"c50",cat:"Course",ic:"50",name:"50 km courus",desc:"Cumulé sur tous tes tapis et sorties.",ev:function(C){return aCum(C,kmOf("run"),50)}},
  {id:"c100",cat:"Course",ic:"100",name:"Cent bornes",desc:"100 km courus au total.",ev:function(C){return aCum(C,kmOf("run"),100)}},
@@ -1030,7 +1043,7 @@ function succesHtml(){
         (r.done?'<small>Débloqué le '+esc(new Date(r.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"}))+'</small>':prog)+'</div></div>';
     }).join("")+'</div>';
   });
-  return '<section class="card"><span class="label">Succès débloqués</span><div class="num" style="font-size:34px;line-height:1">'+done+' / '+R.length+'</div><div class="xp"><i style="width:'+Math.round(done/R.length*100)+'%"></i></div></section>'+boss+out;
+  return '<section class="card"><span class="label">Succès débloqués</span><div class="num" style="font-size:34px;line-height:1">'+done+' / '+R.length+'</div><div class="xp"><i style="width:'+Math.round(done/R.length*100)+'%"></i></div></section>'+out;
 }
 function progresHtml(){
   var vis=S.machines.filter(function(m){return !m.hidden});
@@ -1188,7 +1201,7 @@ function claudeText(n){
 function aiSummary(se){
   var L=["Analyse cette séance de musculation (app Reps). Dis-moi ce qui s'est bien passé, les points d'attention (douleurs, reps qui chutent, ressenti bas, charge trop haute) et les charges à viser à la prochaine séance. Sois concis.",
     "Légende : charges en kg, ressenti de 1 (très dur) à 5 (excellent), ★ = record.",
-    "Poids de corps : "+fmt(S.bw)+" kg"+(function(){var t=bwTrend();return t?" ("+(t.diff>0?"+":"")+fmt(t.diff)+" kg en "+t.days+" jours)":""})()+". Objectifs : prendre du muscle et de la force, préparer un 30 km de course en mars.",""];
+    "Poids de corps : "+fmt(S.bw)+" kg"+(function(){var t=bwTrend();return t?" ("+(t.diff>0?"+":"")+fmt(t.diff)+" kg en "+t.days+" jours)":""})()+". Objectifs : prendre du muscle et de la force, garder une bonne condition cardio. Semaine type : Bas, Haut, Bas + cardio, Haut.",""];
   L.push("Séance du "+se.d+(se.name?" ("+se.name+")":""));
   groups(se.sets).forEach(function(g){
     var m=mach(g.id),rt=se.rates&&se.rates[g.id],prev=null,gw=isWU(g.items[0].x,se.sets);
