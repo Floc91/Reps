@@ -297,6 +297,19 @@ nav{position:fixed;left:0;right:0;bottom:0;z-index:6;display:grid;grid-template-
 nav button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;min-height:56px;border-radius:8px;font-size:12px;font-weight:600;color:var(--mute)}
 nav button[aria-selected="true"]{background:none;color:var(--accent)}
 .bar{bottom:calc(65px + env(safe-area-inset-bottom,0px));padding-top:10px;padding-bottom:10px;border-top:1px solid var(--line);background:var(--bg)}
+
+.recburst{position:fixed;inset:0;z-index:60;display:grid;place-items:center;pointer-events:auto;background:color-mix(in srgb,var(--bg) 35%,transparent);animation:rbfade 2.2s ease forwards}
+.rb-card{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:6px;padding:22px 28px;border-radius:18px;background:var(--surface);border:2px solid var(--gold);box-shadow:0 0 0 6px color-mix(in srgb,var(--gold) 18%,transparent),0 18px 40px rgba(0,0,0,.35);text-align:center;animation:rbpop .5s cubic-bezier(.2,1.6,.4,1) both}
+.rb-card b{font-family:var(--f-display);font-size:30px;letter-spacing:.02em;color:var(--ink)}
+.rb-card span{font-size:15px;color:var(--mute)}
+.rb-card .rb-xp{font-family:var(--f-display);font-size:20px;color:var(--gold);font-weight:700}
+.rb-card svg{animation:rbspin .9s ease-out both}
+.recburst i{position:absolute;left:50%;top:50%;width:9px;height:14px;border-radius:2px;opacity:0;animation:rbfly 1.1s ease-out forwards}
+@keyframes rbpop{0%{transform:scale(.4);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes rbspin{0%{transform:rotate(-25deg) scale(.6)}60%{transform:rotate(10deg) scale(1.15)}100%{transform:none}}
+@keyframes rbfly{0%{opacity:1;transform:translate(-50%,-50%) rotate(0)}100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy) + 60px)) rotate(var(--r))}}
+@keyframes rbfade{0%,80%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.recburst,.rb-card,.rb-card svg{animation:none}.recburst i{display:none}}
 html,body{margin:0}
 </style>
 
@@ -542,7 +555,7 @@ function adopt(d){
   return s;
 }
 (function init(){
-  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"12/11 19:39";afterLoad();render();
+  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"17/11 12:42";afterLoad();render();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 })();
 
@@ -704,14 +717,30 @@ function levels(sc,range){
 function machLevels(id){var mu=muOf(id),lv={};Object.keys(mu).forEach(function(k){lv[k]=mu[k]==="p"?3:1});return lv}
 
 /* ---------- actions ---------- */
+function celebrate(id,st){
+  try{
+    var m=mach(id),old=document.getElementById("recburst");if(old)old.remove();
+    var el=document.createElement("div");el.id="recburst";el.className="recburst";el.setAttribute("role","status");
+    var bits="",cols=["var(--gold)","var(--accent)","#ff8a3d","var(--gold)"];
+    for(var i=0;i<22;i++){var a=(i/22)*Math.PI*2+Math.random()*.3,d=110+Math.random()*90;
+      bits+='<i style="--dx:'+Math.round(Math.cos(a)*d)+'px;--dy:'+Math.round(Math.sin(a)*d)+'px;--r:'+Math.round(Math.random()*360)+'deg;background:'+cols[i%4]+';animation-delay:'+(Math.random()*.12).toFixed(2)+'s"></i>'}
+    el.innerHTML='<div class="rb-card"><svg width="56" height="56" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-10 0z" fill="var(--gold)"/><path d="M7 5H4v1.5A3.5 3.5 0 0 0 7.5 10M17 5h3v1.5A3.5 3.5 0 0 1 16.5 10" fill="none" stroke="var(--gold)" stroke-width="1.6"/><path d="M10.5 12h3l.5 4h-4z M8 17h8v3H8z" fill="var(--gold)"/></svg>'+
+      '<b>Nouveau record !</b><span>'+esc(m?m.name:id)+' · '+esc(fmtSet(st))+'</span><span class="rb-xp">+25 XP</span></div>'+bits;
+    document.body.appendChild(el);
+    if(navigator.vibrate)try{navigator.vibrate([40,60,90])}catch(_){}
+    el.addEventListener("click",function(){el.remove()});
+    setTimeout(function(){if(el.parentNode)el.remove()},2200);
+  }catch(e){}
+}
 function toast(msg,gold){
   var t=document.getElementById("toast");
   t.innerHTML='<div class="toast'+(gold?" gold":"")+'" role="status">'+esc(msg)+"</div>";
   clearTimeout(toast.h);toast.h=setTimeout(function(){t.innerHTML=""},2600);
 }
 function openSheet(id){
-  var w=S.draft.wip[id],rows,kd=kindOf(id),wu=draftWU(id);
+  var w=S.draft.wip[id],rows,kd=kindOf(id),wu=draftWU(id),done=S.draft.sets.filter(function(x){return x.m===id});
   if(w&&w.length)rows=w;
+  else if(done.length)rows=done.map(function(x){return isT(x)?(x.k!=null?{t:x.t,k:x.k}:{t:x.t}):{w:x.w,r:x.r}});
   else{
     var ls=lastSession(id,wu);
     if(ls)rows=ls.map(function(x){return isT(x)?(x.k!=null?{t:x.t,k:x.k}:{t:x.t}):{w:x.w,r:x.r}});
@@ -738,18 +767,24 @@ function addRow(){
 function terminer(){
   if(!sh||!sh.rows.length)return;
   var id=sh.id,xp=0,prs=0,n=sh.rows.length,kind=kindOf(id),wu=draftWU(id);
+  var old=S.draft.sets.filter(function(x){return x.m===id}),oldPr=0;
+  old.forEach(function(x){S.draft.xp=Math.max(0,(S.draft.xp||0)-10-(x.pr?25:0));if(x.pr){oldPr++;S.prs=Math.max(0,S.prs-1)}});
+  if(old.length)S.draft.sets=S.draft.sets.filter(function(x){return x.m!==id});
+  var bestNew=null;
   sh.rows.forEach(function(row){
     var prior=bestSet(id,true),pr=!wu&&!!prior&&sc(row)>sc(prior)+0.001;
     var st={m:id,pr:pr};if(isCardioM(id))st.wu=wu;
     if(row.t!=null){st.t=row.t;if(row.k!=null)st.k=row.k}else{st.w=row.w;st.r=row.r}
     S.draft.sets.push(st);
-    xp+=10+(pr?25:0);if(pr){prs++;S.prs++}
+    xp+=10+(pr?25:0);if(pr){prs++;S.prs++;bestNew=st}
   });
   S.draft.xp=(S.draft.xp||0)+xp;
   if(kind==="w"&&mach(id))mach(id).w=sh.rows[sh.rows.length-1].w;
   delete S.draft.wip[id];sh=null;
   save();render();
-  toast("Exercice terminé : "+n+" série"+(n>1?"s":"")+(prs?", "+prs+" record"+(prs>1?"s":""):"")+"  +"+xp+" XP",prs>0);
+  if(old.length)toast("Séries corrigées : "+n+" série"+(n>1?"s":"")+(prs?", "+prs+" record"+(prs>1?"s":""):""),prs>0);
+  else toast("Exercice terminé : "+n+" série"+(n>1?"s":"")+(prs?", "+prs+" record"+(prs>1?"s":""):"")+"  +"+xp+" XP",prs>0);
+  if(bestNew&&prs>oldPr)celebrate(id,bestNew);
 }
 function undo(){
   var s=S.draft.sets.pop();if(!s)return;
@@ -1454,7 +1489,8 @@ function sheetHtml(){
     '<button class="btn ghost" data-a="addrow">+ Ajouter une série</button>'+
     '<div><span class="label">Ressenti de l\'exercice</span><div class="rate" style="margin-top:6px" role="group" aria-label="Note de 1 à 5">'+[1,2,3,4,5].map(function(n){return '<button data-a="rate" data-v="'+n+'" aria-pressed="'+(S.draft.rates[sh.id]===n)+'">'+n+'</button>'}).join("")+'</div><div class="xpline" style="margin-top:6px"><span>'+(S.draft.rates[sh.id]?RL[S.draft.rates[sh.id]]:"1 = très dur, 5 = excellent · +5 XP la première fois")+'</span></div></div>'+
     '<label class="fld"><span>Commentaire de l\'exercice</span><textarea data-f="xn" data-s="draft" data-id="'+esc(sh.id)+'" rows="2" maxlength="300" placeholder="Douleur, sensation, réglage…">'+esc((S.draft.notes||{})[sh.id]||"")+'</textarea></label>'+
-    '<div class="endrow"><button class="btn" data-a="terminer"'+(sh.rows.length?'':' disabled')+'>Terminer l\'exercice</button><button class="trash" data-a="unsel" aria-label="Retirer cet exercice de la séance">'+IC_TR+'</button></div>'+
+    (nS?'<div class="xpline"><span>'+nS+' série'+(nS>1?'s':'')+' déjà validée'+(nS>1?'s':'')+' aujourd\'hui : corrige-les si besoin, puis enregistre.</span></div>':'')+
+    '<div class="endrow"><button class="btn" data-a="terminer"'+(sh.rows.length?'':' disabled')+'>'+(nS?'Enregistrer les corrections':'Terminer l\'exercice')+'</button><button class="trash" data-a="unsel" aria-label="Retirer cet exercice de la séance">'+IC_TR+'</button></div>'+
     delBlock+
     '</div></div>';
 }
