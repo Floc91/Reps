@@ -380,6 +380,25 @@ function migrateWeek(s){
   }
   s.progv=2;
 }
+function migrateHaut(s){
+  if(s.progv>=3||!Array.isArray(s.progs))return;
+  var P={};s.progs.forEach(function(p){P[p.id]=p});
+  var tue=P.p_tue;
+  if(s.progv===2&&tue&&tue.name==="Haut"&&(tue.days||[]).indexOf(4)>=0&&!P.p_thu2){
+    var have={};s.machines.forEach(function(m){have[m.id]=m});
+    function ins(after,m){var i=-1;s.machines.forEach(function(x,j){if(x.id===after)i=j});if(i>=0)s.machines.splice(i+1,0,m);else s.machines.push(m)}
+    if(!have.latbi)ins("lat",{id:"latbi",name:"Tirage vertical prise biceps",w:30,step:5,mu:{lats:"p",biceps:"p",midback:"s",forearms:"s"}});
+    else have.latbi.hidden=false;
+    if(!have.shrug)ins("tri",{id:"shrug",name:"Shrugs haltères (trapèzes)",w:10,step:2.5,mu:{traps:"p",forearms:"s"}});
+    else have.shrug.hidden=false;
+    tue.name="Haut mardi";tue.days=[2];
+    var ms=tue.machines.map(function(k){return k==="lat"?"latbi":k});
+    if(ms.indexOf("latbi")<0)ms.unshift("latbi");
+    var pi=ms.indexOf("plank");if(pi>=0)ms.splice(pi,0,"shrug");else ms.push("shrug");
+    s.progs.splice(s.progs.indexOf(tue)+1,0,{id:"p_thu2",name:"Haut jeudi",days:[4],machines:ms});
+  }
+  s.progv=3;
+}
 function legacyProgs(){return [
   {id:"p_mon",name:"Bas",days:[1],machines:PROG.mon.slice()},{id:"p_tue",name:"Haut",days:[2],machines:PROG.tue.slice()},
   {id:"p_wed",name:"Cardio",days:[3],machines:PROG.wed.slice()},{id:"p_thu",name:"Full body",days:[4],machines:PROG.thu.slice()},
@@ -550,12 +569,12 @@ function adopt(d){
   if(Array.isArray(d.progs))s.progs=d.progs.filter(function(p){return p&&typeof p.name==="string"&&Array.isArray(p.machines)}).map(function(p){return {id:String(p.id||"p"+Math.random().toString(36).slice(2,8)),name:p.name.slice(0,40),days:Array.isArray(p.days)?p.days.filter(function(x){return x>=0&&x<=6}):(LEGDAYS[p.id]||[]),machines:p.machines.filter(function(x){return typeof x==="string"})}});
   else if((Array.isArray(d.machines)&&d.machines.length)||(Array.isArray(d.sessions)&&d.sessions.length))s.progs=legacyProgs();
   var exm={};s.machines.forEach(function(m){exm[m.id]=1});s.progs.forEach(function(p){p.machines=p.machines.filter(function(x){return exm[x]})});
-  ensureSeed(s);renameHaut(s);migrateWeek(s);
+  ensureSeed(s);renameHaut(s);migrateWeek(s);migrateHaut(s);
   s.sessions.forEach(function(x){if(!x.rx){var n=x.rates?Object.keys(x.rates).length:0;if(n)x.xp=(x.xp||0)+5*n;x.rx=1}});
   return s;
 }
 (function init(){
-  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"17/11 12:42";afterLoad();render();
+  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"17/11 12:52";afterLoad();render();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 })();
 
