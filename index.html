@@ -399,6 +399,17 @@ function migrateHaut(s){
   }
   s.progv=3;
 }
+function migrateExtra(s){
+  if(s.progv>=4||!Array.isArray(s.machines))return;
+  if(s.progv===3&&s.machines.length){
+    var have={};s.machines.forEach(function(m){have[m.id]=m});
+    function ins(after,m){var i=-1;s.machines.forEach(function(x,j){if(x.id===after)i=j});if(i>=0)s.machines.splice(i+1,0,m);else s.machines.push(m)}
+    if(!have.stairs)ins("run",{id:"stairs",name:"Escalier",w:0,step:5,kind:"d",du:"étages",mu:{cardio:"p",glutes:"s",quads:"s",calves:"s"}});
+    if(!have.plankst)ins("plank",{id:"plankst",name:"Gainage touches d'épaule",w:0,step:5,kind:"r",mu:{abs:"p",obliques:"p",delt_ant:"s",pecs:"s"}});
+    s.progs.forEach(function(p){if(p.id==="p_wed"&&p.machines.indexOf("stairs")<0){var i=p.machines.indexOf("run");p.machines.splice(i>=0?i+1:p.machines.length,0,"stairs")}});
+  }
+  s.progv=4;
+}
 function legacyProgs(){return [
   {id:"p_mon",name:"Bas",days:[1],machines:PROG.mon.slice()},{id:"p_tue",name:"Haut",days:[2],machines:PROG.tue.slice()},
   {id:"p_wed",name:"Cardio",days:[3],machines:PROG.wed.slice()},{id:"p_thu",name:"Full body",days:[4],machines:PROG.thu.slice()},
@@ -569,12 +580,12 @@ function adopt(d){
   if(Array.isArray(d.progs))s.progs=d.progs.filter(function(p){return p&&typeof p.name==="string"&&Array.isArray(p.machines)}).map(function(p){return {id:String(p.id||"p"+Math.random().toString(36).slice(2,8)),name:p.name.slice(0,40),days:Array.isArray(p.days)?p.days.filter(function(x){return x>=0&&x<=6}):(LEGDAYS[p.id]||[]),machines:p.machines.filter(function(x){return typeof x==="string"})}});
   else if((Array.isArray(d.machines)&&d.machines.length)||(Array.isArray(d.sessions)&&d.sessions.length))s.progs=legacyProgs();
   var exm={};s.machines.forEach(function(m){exm[m.id]=1});s.progs.forEach(function(p){p.machines=p.machines.filter(function(x){return exm[x]})});
-  ensureSeed(s);renameHaut(s);migrateWeek(s);migrateHaut(s);
+  ensureSeed(s);renameHaut(s);migrateWeek(s);migrateHaut(s);migrateExtra(s);
   s.sessions.forEach(function(x){if(!x.rx){var n=x.rates?Object.keys(x.rates).length:0;if(n)x.xp=(x.xp||0)+5*n;x.rx=1}});
   return s;
 }
 (function init(){
-  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"18/11 11:35";afterLoad();render();
+  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"18/11 12:50";afterLoad();render();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 })();
 
@@ -582,6 +593,10 @@ function adopt(d){
 function e1(w,r){return w*(1+r/30)}
 function kindOf(id){var m=mach(id);return (m&&m.kind)||"w"}
 function isT(x){return x.t!=null}
+function unitOf(id){var m=mach(id);return (m&&m.du)||"km"}
+function isFloors(id){return unitOf(id)!=="km"}
+function fmtDist(k,id){return isFloors(id)?fmt(k)+" étage"+(k>1?"s":""):fmtKm(k)+" km"}
+function rateOf(ss){var n=0,t=0;ss.forEach(function(x){if(x.k!=null&&x.k>0&&x.t){n+=x.k;t+=x.t}});return n?n/(t/60):null}
 function isCardioM(id){return kindOf(id)==="d"}
 function isWU(x,sets){return isCardioM(x.m)&&(x.wu!=null?!!x.wu:((x.t||0)<900&&sets.some(function(y){return !isT(y)})))}
 function draftWU(id){
@@ -598,7 +613,7 @@ function stepW(w,d){
   if(w>2.5)return 2.5;
   return 0;
 }
-function sc(x){return isT(x)?(x.k!=null?x.k*1e5:0)+(x.t||0):e1(x.w,x.r)}
+function sc(x){return isT(x)?(x.k!=null?x.k*1e5:0)+(x.t||0):(x.w>0?e1(x.w,x.r):(x.r||0)/100)}
 function pad(n){return n<10?"0"+n:""+n}
 function fmtDur(sec){
   sec=Math.round(sec);
@@ -614,7 +629,8 @@ function parseDur(v){
 }
 function fmtKm(k){return (Math.round(k*100)/100).toString().replace(".",",")}
 function fmtSet(x){
-  if(isT(x))return fmtDur(x.t)+(x.k!=null?" · "+fmtKm(x.k)+" km":"");
+  if(isT(x))return fmtDur(x.t)+(x.k!=null?" · "+fmtDist(x.k,x.m):"");
+  if(!(x.w>0)&&kindOf(x.m)==="r")return x.r+" reps";
   return fmt(x.w)+" kg × "+x.r;
 }
 function fmt(n){return (Math.round(n*10)/10).toString().replace(".",",")}
@@ -764,6 +780,7 @@ function openSheet(id){
     var ls=lastSession(id,wu);
     if(ls)rows=ls.map(function(x){return isT(x)?(x.k!=null?{t:x.t,k:x.k}:{t:x.t}):{w:x.w,r:x.r}});
     else if(kd==="w"){var mm=mach(id);rows=[{w:(mm&&mm.w)||10,r:10}]}
+    else if(kd==="r")rows=[{w:0,r:10}];
     else if(kd==="t")rows=[{t:60}];
     else rows=[wu?{t:300}:{t:1800}];
   }
@@ -780,7 +797,7 @@ function num(v,dec){
 }
 function addRow(){
   var last=sh.rows[sh.rows.length-1],kd=kindOf(sh.id),mm=mach(sh.id);
-  sh.rows.push(last?JSON.parse(JSON.stringify(last)):(kd==="w"?{w:(mm&&mm.w)||10,r:10}:kd==="t"?{t:60}:{t:300}));
+  sh.rows.push(last?JSON.parse(JSON.stringify(last)):(kd==="w"?{w:(mm&&mm.w)||10,r:10}:kd==="r"?{w:0,r:10}:kd==="t"?{t:60}:{t:300}));
   touch();render();
 }
 function terminer(){
@@ -796,7 +813,7 @@ function terminer(){
     var wrec=!wu&&kind==="w"&&pw!=null&&row.w!=null&&row.w>pw+0.001;
     var pr=!wu&&((!!prior&&sc(row)>sc(prior)+0.001)||wrec);
     var st={m:id,pr:pr};if(isCardioM(id))st.wu=wu;
-    if(row.t!=null){st.t=row.t;if(row.k!=null)st.k=row.k}else{st.w=row.w;st.r=row.r}
+    if(row.t!=null){st.t=row.t;if(row.k!=null)st.k=row.k}else{st.w=kind==="r"?0:row.w;st.r=row.r}
     S.draft.sets.push(st);
     xp+=10+(pr?25:0);if(pr){prs++;S.prs++;if(!bestNew||(wrec&&!bestIsW)){bestNew=st;bestIsW=wrec}}
   });
@@ -958,7 +975,7 @@ function seanceHtml(){
     var wp=S.draft.wip[m.id],sub=wp&&wp.length?"En cours : "+wp.length+" série"+(wp.length>1?"s":"")+" saisie"+(wp.length>1?"s":""):lastTxt+(ls&&lastRate(m.id)?" · ressenti "+lastRate(m.id)+"/5":"");
     var nn=muNames(m.id),mus=nn.p.concat(nn.s);
     var mine=S.draft.sets.filter(function(x){return x.m===m.id});
-    var right=kind==="w"?fmt(mine.length?mine[mine.length-1].w:(ls?Math.max.apply(null,ls.map(function(x){return x.w})):(m.w||0)))+' <small>kg</small>':(mine.length?fmtDur(mine[mine.length-1].t):ls?fmtDur(ls[ls.length-1].t):'—');
+    var right=kind==="r"?((mine.length?mine[mine.length-1].r:ls?ls[ls.length-1].r:'—')+' <small>reps</small>'):kind==="w"?fmt(mine.length?mine[mine.length-1].w:(ls?Math.max.apply(null,ls.map(function(x){return x.w})):(m.w||0)))+' <small>kg</small>':(mine.length?fmtDur(mine[mine.length-1].t):ls?fmtDur(ls[ls.length-1].t):'—');
     return '<button class="mach" data-a="open" data-id="'+esc(m.id)+'"><span class="nm">'+esc(m.name)+
       (mus.length?'<span class="mus">'+esc(mus.join(" · "))+'</span>':'')+'<span class="sub">'+esc(sub)+'</span></span>'+
       (done?'<span class="badge-n" aria-label="'+done+' séries">'+done+'</span>':"")+
@@ -1151,7 +1168,8 @@ function detailHtml(){
     if(det.edit){
       rows=g.items.map(function(it,k){
         var a,b2;
-        if(isT(it.x)){a=inp(it,"t",fmtClock(it.x.t),"Durée série "+(k+1)+" "+esc(nm));b2=(it.x.k!=null||kindOf(g.id)==="d")?inp(it,"k",it.x.k!=null?fmtKm(it.x.k):"","Distance km série "+(k+1)):'<span></span>'}
+        if(isT(it.x)){a=inp(it,"t",fmtClock(it.x.t),"Durée série "+(k+1)+" "+esc(nm));b2=(it.x.k!=null||kindOf(g.id)==="d")?inp(it,"k",it.x.k!=null?fmtKm(it.x.k):"",(isFloors(g.id)?"Étages":"Distance km")+" série "+(k+1)):'<span></span>'}
+        else if(kindOf(g.id)==="r"){a=inp(it,"r",it.x.r,"Reps série "+(k+1)+" "+esc(nm));b2='<span></span>'}
         else{a=inp(it,"w",fmt(it.x.w),"Charge série "+(k+1)+" "+esc(nm));b2=inp(it,"r",it.x.r,"Reps série "+(k+1))}
         return '<div class="eset"><span class="idx">'+(k+1)+'</span>'+a+b2+'<button class="del" data-a="dset" data-i="'+it.i+'" aria-label="Supprimer la série '+(k+1)+'">×</button></div>';
       }).join("");
@@ -1161,7 +1179,8 @@ function detailHtml(){
     var kmT=sets.reduce(function(a,x){return a+(x.k||0)},0);
     var gwu=isWU(g.items[0].x,se.sets);
     var gp=kindOf(g.id)==="d"?paceOf(sets,g.id):null;
-    var head=(gwu?'échauffement · ':'')+(vol(sets)>0?'':fmtDur(totT(sets))+(kmT?' · '+fmtKm(kmT)+' km':'')+(gp!=null?' · '+fmtPace(gp)+' '+paceUnit(g.id):''));
+    var gr=kindOf(g.id)==="d"&&isFloors(g.id)?rateOf(sets):null;
+    var head=(gwu?'échauffement · ':'')+(kindOf(g.id)==="r"?sets.reduce(function(a,x){return a+(x.r||0)},0)+' reps':vol(sets)>0?'':fmtDur(totT(sets))+(kmT?' · '+fmtDist(kmT,g.id):'')+(gp!=null?' · '+fmtPace(gp)+' '+paceUnit(g.id):'')+(gr!=null?' · '+fmt(gr)+' étages/min':''));
     return '<div class="exb"><div class="hd"><div class="hdt"><b>'+esc(nm)+'</b><span class="mnote">'+[head,rt?'ressenti '+rt+'/5':''].filter(Boolean).join(' · ')+'</span></div><button class="x cbtn" data-a="chart" data-id="'+esc(g.id)+'" aria-label="Voir les courbes de '+esc(nm)+'"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18"/><path d="M5 16l4-5 4 3 6-8"/></svg></button></div>'+(det.edit&&isCardioM(g.id)?'<div class="pills" role="group" aria-label="Type d\'effort"><button class="pill" data-a="dwu" data-id="'+esc(g.id)+'" data-v="0" aria-pressed="'+(!gwu)+'">Cardio</button><button class="pill" data-a="dwu" data-id="'+esc(g.id)+'" data-v="1" aria-pressed="'+gwu+'">Échauffement</button></div>':'')+(det.edit?'<label class="fld"><span>Commentaire de l\'exercice</span><textarea data-f="xn" data-s="'+esc(se.id)+'" data-id="'+esc(g.id)+'" rows="2" maxlength="300" placeholder="Douleur, sensation, réglage…">'+esc((se.notes||{})[g.id]||"")+'</textarea></label>':((se.notes||{})[g.id]?'<p class="cap" style="margin:0">'+esc(se.notes[g.id])+'</p>':''))+rows+(det.edit?'<div><span class="label">Ressenti de l\'exercice</span><div class="rate" style="margin-top:6px" role="group" aria-label="Note de 1 à 5">'+[1,2,3,4,5].map(function(n){return '<button data-a="drate" data-id="'+esc(g.id)+'" data-v="'+n+'" aria-pressed="'+(rt===n)+'">'+n+'</button>'}).join("")+'</div></div>':'')+'</div>';
   }).join("");
   var del=det.del?'<button class="btn" style="background:#b3261e;color:#fff" data-a="dconfirm">Confirmer la suppression de la séance</button><button class="btn ghost" data-a="dcancel">Annuler</button>':'<button class="btn danger" data-a="ddel">Supprimer la séance</button>';
@@ -1183,11 +1202,17 @@ function chartSets(id){
   return out;
 }
 function per500(id){var m=mach(id);return id==="rower"||!!(m&&/rame|row/i.test(m.name))}
-function paceOf(ss,id){var km=0,t=0;ss.forEach(function(x){if(x.k!=null&&x.k>0&&x.t){km+=x.k;t+=x.t}});if(!km)return null;return per500(id)?t/(km*2):t/km}
+function paceOf(ss,id){if(isFloors(id))return null;var km=0,t=0;ss.forEach(function(x){if(x.k!=null&&x.k>0&&x.t){km+=x.k;t+=x.t}});if(!km)return null;return per500(id)?t/(km*2):t/km}
 function fmtPace(sec){if(sec==null)return "—";sec=Math.round(sec);return Math.floor(sec/60)+":"+pad(sec%60)}
 function paceUnit(id){return per500(id)?"/500 m":"/km"}
 function chartCfg(rows,id){
   var timed=rows.some(function(r){return r.ss.some(isT)});
+  if(kindOf(id)==="r")return {ta:"Reps max par série",sa:"Meilleure série de chaque séance.",tb:"Reps totales",sb:"Toutes les séries additionnées.",
+    ha:"Reps max",hb:"Total",hs:"Séries",ua:" reps",ub:" reps",fa:fmt,fb:fmt,a:function(ss){return Math.max.apply(null,ss.map(function(x){return x.r||0}))},
+    b:function(ss){return ss.reduce(function(a,x){return a+(x.r||0)},0)},s:function(ss){return ss.map(function(x){return x.r}).join(" · ")}};
+  if(kindOf(id)==="d"&&isFloors(id)&&rows.some(function(r){return r.ss.some(function(x){return x.k!=null})}))return {ta:"Rythme (étages/min)",sa:"Plus haut = plus rapide.",
+    tb:"Étages",sb:"Étages montés à chaque séance.",ha:"Rythme",hb:"Étages",hs:"Durée",ua:" ét./min",ub:" étages",fa:fmt,fb:fmt,
+    a:function(ss){return rateOf(ss)},b:function(ss){return ss.reduce(function(a,x){return a+(x.k||0)},0)},s:function(ss){return fmtDur(totT(ss))}};
   if(!timed)return {ta:"Charge de travail (kg)",sa:"Charge la plus lourde de chaque séance.",tb:"Volume total (kg)",sb:"Séries × reps × charge, additionné sur la séance.",
     ha:"Charge",hb:"Volume",ua:" kg",ub:" kg",fa:fmt,fb:fmtN,
     a:function(ss){return Math.max.apply(null,ss.map(function(x){return x.w}))},b:vol};
@@ -1411,7 +1436,7 @@ function mgrHtml(){
   return edPop("Mes machines",(rows?'<div class="list">'+rows+'</div>':'<div class="empty">Aucune machine pour l\'instant.</div>')+'<button class="btn" data-a="mnew">+ Nouvelle machine</button>'+hidHtml,"mgrclose");
 }
 function medHtml(){
-  var e=mEd,isNew=!e.id,kinds=[["w","Charge et reps"],["t","Durée"],["d","Durée et distance"]];
+  var e=mEd,isNew=!e.id,kinds=[["w","Charge et reps"],["r","Reps (poids du corps)"],["t","Durée"],["d","Durée et distance"],["f","Durée et étages"]];
   function chip(k){var st=e.mu[k]==="p"?"p":e.mu[k]==="s"?"s":"";return '<button class="mchip '+st+'" data-a="mmu" data-k="'+k+'" aria-label="'+esc(NAME[k])+(st==="p"?', principal':st==="s"?', secondaire':'')+'">'+esc(NAME[k])+(st==="p"?' ●':st==="s"?' ◐':'')+'</button>'}
   var chips=GROUPS.map(function(g){return '<div class="gch"><span class="label">'+g[0]+'</span><div class="mchips">'+g[1].map(chip).join("")+'</div></div>'}).join("");
   var kindHtml=isNew?'<span class="label">Type de mesure</span><div class="pills" role="group" aria-label="Type">'+kinds.map(function(k){return '<button class="pill" data-a="mkind" data-k="'+k[0]+'" aria-pressed="'+(e.kind===k[0])+'">'+k[1]+'</button>'}).join("")+'</div>':'';
@@ -1459,7 +1484,7 @@ function saveMachine(){
   if(e.id){var m=mach(e.id);if(m){m.name=name;m.mu=mu}}
   else{
     var m2={id:"m"+Date.now(),name:name,w:e.kind==="w"?10:0,step:5,mu:mu};
-    if(e.kind!=="w")m2.kind=e.kind;
+    if(e.kind==="f"){m2.kind="d";m2.du="étages"}else if(e.kind!=="w")m2.kind=e.kind;
     S.machines.push(m2);
     if(S.draft.meta)selIds().push(m2.id);
     if(pEd&&pEd.machines.indexOf(m2.id)<0)pEd.machines.push(m2.id);
@@ -1479,19 +1504,20 @@ function sheetHtml(){
   if(!sh)return "";
   var m=mach(sh.id),kind=kindOf(sh.id),b=bestSet(sh.id,true),swu=draftWU(sh.id),ls=lastSession(sh.id,swu),lrt=lastRate(sh.id),nn=muNames(sh.id);
   var done=S.draft.sets.filter(function(x){return x.m===sh.id}).map(function(x){return '<span class="chip'+(x.pr?" pr":"")+'">'+esc(fmtSet(x))+(x.pr?" ★":"")+'</span>'}).join("");
-  var last=ls?ls.map(function(x){return isT(x)?fmtSet(x):fmt(x.w)+" × "+x.r}).join(" · "):"—";
+  var last=ls?ls.map(function(x){return isT(x)||kind==="r"?fmtSet(x):fmt(x.w)+" × "+x.r}).join(" · "):"—";
   var rec=b?(kind==="w"?fmt(b.w)+' × '+b.r:fmtSet(b)):'—';
   var mtxt=(nn.p.length||nn.s.length)?'<p class="cap">'+(nn.p.length?'<b>Principal :</b> '+esc(nn.p.join(", "))+'. ':'')+(nn.s.length?'<b>Secondaire :</b> '+esc(nn.s.join(", "))+'.':'')+'</p>':'';
   function stp(i,f,txt,lab){return '<div class="st"><button data-a="rw" data-i="'+i+'" data-f="'+f+'" data-d="-1" aria-label="Moins, '+lab+'">−</button><input data-f="'+f+'" data-i="'+i+'" inputmode="decimal" value="'+txt+'" aria-label="'+lab+'"><button data-a="rw" data-i="'+i+'" data-f="'+f+'" data-d="1" aria-label="Plus, '+lab+'">+</button></div>'}
   var rows=sh.rows.map(function(r,i){
     var n=i+1,cells;
     if(kind==="w")cells=stp(i,"w",fmt(r.w),"Charge série "+n)+stp(i,"r",r.r,"Reps série "+n);
+    else if(kind==="r")cells=stp(i,"r",r.r,"Reps série "+n);
     else if(kind==="t")cells=stp(i,"t",fmtClock(r.t),"Durée série "+n);
-    else cells=stp(i,"t",fmtClock(r.t),"Durée série "+n)+stp(i,"k",r.k!=null?fmtKm(r.k):"","Distance km série "+n);
-    return '<div class="setrow'+(kind==="t"?' one':'')+'"><span class="idx">'+n+'</span>'+cells+
+    else cells=stp(i,"t",fmtClock(r.t),"Durée série "+n)+stp(i,"k",r.k!=null?fmtKm(r.k):"",(isFloors(sh.id)?"Étages":"Distance km")+" série "+n);
+    return '<div class="setrow'+(kind==="t"||kind==="r"?' one':'')+'"><span class="idx">'+n+'</span>'+cells+
       '<button class="del" data-a="del" data-i="'+i+'" aria-label="Supprimer la série '+n+'">×</button></div>';
   }).join("");
-  var hdr=kind==="w"?'<span>Charge (kg)</span><span>Reps</span>':kind==="t"?'<span>Durée (min:s)</span>':'<span>Durée (min:s)</span><span>Distance (km)</span>';
+  var hdr=kind==="w"?'<span>Charge (kg)</span><span>Reps</span>':kind==="r"?'<span>Reps</span>':kind==="t"?'<span>Durée (min:s)</span>':'<span>Durée (min:s)</span><span>'+(isFloors(sh.id)?'Étages':'Distance (km)')+'</span>';
   var nS=S.draft.sets.filter(function(x){return x.m===sh.id}).length;
   var delBlock=sh.del?'<div class="xpline"><span><b>Supprimer cet exercice de la séance ?</b>'+(nS?'<br>Attention, des séries ont déjà été validées !':'')+'</span></div><button class="btn" style="background:#b3261e;color:#fff" data-a="unsely">Supprimer</button><button class="btn ghost" data-a="mcancel">Annuler</button>':'';
   var IC_PEN='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
@@ -1506,7 +1532,7 @@ function sheetHtml(){
     '<div><span class="label">Dernier ressenti</span><span class="num">'+(lrt?lrt+'/5':'—')+'</span></div></div>'+
     (swu?'<div class="xpline"><span>Échauffement : ne compte ni dans les records ni dans les courbes.</span></div>':'')+
     (done?'<div><span class="label">Déjà validé aujourd\'hui</span><div class="chips" style="margin-top:6px">'+done+'</div><button class="btn ghost" style="margin-top:8px;width:100%" data-a="undo">Annuler la dernière série validée</button></div>':'')+
-    '<div class="setsh label'+(kind==="t"?' one':'')+'"><span>#</span>'+hdr+'<span></span></div>'+
+    '<div class="setsh label'+(kind==="t"||kind==="r"?' one':'')+'"><span>#</span>'+hdr+'<span></span></div>'+
     rows+
     '<button class="btn ghost" data-a="addrow">+ Ajouter une série</button>'+
     '<div><span class="label">Ressenti de l\'exercice</span><div class="rate" style="margin-top:6px" role="group" aria-label="Note de 1 à 5">'+[1,2,3,4,5].map(function(n){return '<button data-a="rate" data-v="'+n+'" aria-pressed="'+(S.draft.rates[sh.id]===n)+'">'+n+'</button>'}).join("")+'</div><div class="xpline" style="margin-top:6px"><span>'+(S.draft.rates[sh.id]?RL[S.draft.rates[sh.id]]:"1 = très dur, 5 = excellent · +5 XP la première fois")+'</span></div></div>'+
