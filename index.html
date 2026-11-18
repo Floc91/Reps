@@ -574,7 +574,7 @@ function adopt(d){
   return s;
 }
 (function init(){
-  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"17/11 12:52";afterLoad();render();
+  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"18/11 11:35";afterLoad();render();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 })();
 
@@ -736,7 +736,7 @@ function levels(sc,range){
 function machLevels(id){var mu=muOf(id),lv={};Object.keys(mu).forEach(function(k){lv[k]=mu[k]==="p"?3:1});return lv}
 
 /* ---------- actions ---------- */
-function celebrate(id,st){
+function celebrate(id,st,isW){
   try{
     var m=mach(id),old=document.getElementById("recburst");if(old)old.remove();
     var el=document.createElement("div");el.id="recburst";el.className="recburst";el.setAttribute("role","status");
@@ -744,7 +744,7 @@ function celebrate(id,st){
     for(var i=0;i<22;i++){var a=(i/22)*Math.PI*2+Math.random()*.3,d=110+Math.random()*90;
       bits+='<i style="--dx:'+Math.round(Math.cos(a)*d)+'px;--dy:'+Math.round(Math.sin(a)*d)+'px;--r:'+Math.round(Math.random()*360)+'deg;background:'+cols[i%4]+';animation-delay:'+(Math.random()*.12).toFixed(2)+'s"></i>'}
     el.innerHTML='<div class="rb-card"><svg width="56" height="56" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v3a5 5 0 0 1-10 0z" fill="var(--gold)"/><path d="M7 5H4v1.5A3.5 3.5 0 0 0 7.5 10M17 5h3v1.5A3.5 3.5 0 0 1 16.5 10" fill="none" stroke="var(--gold)" stroke-width="1.6"/><path d="M10.5 12h3l.5 4h-4z M8 17h8v3H8z" fill="var(--gold)"/></svg>'+
-      '<b>Nouveau record !</b><span>'+esc(m?m.name:id)+' · '+esc(fmtSet(st))+'</span><span class="rb-xp">+25 XP</span></div>'+bits;
+      '<b>'+(isW?'Record de charge !':'Nouveau record !')+'</b><span>'+esc(m?m.name:id)+' · '+esc(fmtSet(st))+'</span><span class="rb-xp">+25 XP</span></div>'+bits;
     document.body.appendChild(el);
     if(navigator.vibrate)try{navigator.vibrate([40,60,90])}catch(_){}
     el.addEventListener("click",function(){el.remove()});
@@ -789,13 +789,16 @@ function terminer(){
   var old=S.draft.sets.filter(function(x){return x.m===id}),oldPr=0;
   old.forEach(function(x){S.draft.xp=Math.max(0,(S.draft.xp||0)-10-(x.pr?25:0));if(x.pr){oldPr++;S.prs=Math.max(0,S.prs-1)}});
   if(old.length)S.draft.sets=S.draft.sets.filter(function(x){return x.m!==id});
-  var bestNew=null;
+  var bestNew=null,bestIsW=false;
   sh.rows.forEach(function(row){
-    var prior=bestSet(id,true),pr=!wu&&!!prior&&sc(row)>sc(prior)+0.001;
+    var prior=bestSet(id,true),pw=null;
+    if(kind==="w")setsOf(id,true).forEach(function(x){if(!isT(x)&&(pw==null||x.w>pw))pw=x.w});
+    var wrec=!wu&&kind==="w"&&pw!=null&&row.w!=null&&row.w>pw+0.001;
+    var pr=!wu&&((!!prior&&sc(row)>sc(prior)+0.001)||wrec);
     var st={m:id,pr:pr};if(isCardioM(id))st.wu=wu;
     if(row.t!=null){st.t=row.t;if(row.k!=null)st.k=row.k}else{st.w=row.w;st.r=row.r}
     S.draft.sets.push(st);
-    xp+=10+(pr?25:0);if(pr){prs++;S.prs++;bestNew=st}
+    xp+=10+(pr?25:0);if(pr){prs++;S.prs++;if(!bestNew||(wrec&&!bestIsW)){bestNew=st;bestIsW=wrec}}
   });
   S.draft.xp=(S.draft.xp||0)+xp;
   if(kind==="w"&&mach(id))mach(id).w=sh.rows[sh.rows.length-1].w;
@@ -803,7 +806,7 @@ function terminer(){
   save();render();
   if(old.length)toast("Séries corrigées : "+n+" série"+(n>1?"s":"")+(prs?", "+prs+" record"+(prs>1?"s":""):""),prs>0);
   else toast("Exercice terminé : "+n+" série"+(n>1?"s":"")+(prs?", "+prs+" record"+(prs>1?"s":""):"")+"  +"+xp+" XP",prs>0);
-  if(bestNew&&prs>oldPr)celebrate(id,bestNew);
+  if(bestNew&&prs>oldPr)celebrate(id,bestNew,bestIsW);
 }
 function undo(){
   var s=S.draft.sets.pop();if(!s)return;
