@@ -585,7 +585,7 @@ function adopt(d){
   return s;
 }
 (function init(){
-  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"19/11 19:10";afterLoad();render();
+  S=adopt(lsLoad());loaded=true;status="Sauvegarde automatique sur ce téléphone · version "+"21/11 12:40";afterLoad();render();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 })();
 
@@ -909,7 +909,7 @@ function bwHtml(){
   var h=S.bwh||[],tr=bwTrend(),last=h[h.length-1];
   var info=!h.length?'<p class="cap" style="margin:0">Enregistre une pesée par semaine, le matin à jeun : la courbe apparaîtra ici.</p>':
     '<div class="xpline"><span>Dernière pesée : '+fmt(last.kg)+' kg le '+dshort(last.d)+'</span>'+(tr?'<span>'+(tr.diff>0?'+':'')+fmt(tr.diff)+' kg en '+tr.days+' j</span>':'')+'</div>';
-  var ch=h.length>=2?'<div class="chartbox">'+chartSvg(h.map(function(x){return {d:x.d,a:x.kg}}),"a","Poids (kg)",fmt)+'</div>':'';
+  var ch=h.length>=2?'<div class="chartbox">'+chartSvg(h.map(function(x){return {d:x.d,a:x.kg}}),"a","Poids (kg)",fmt)+'</div>':(h.length===1?'<div class="empty">La courbe apparaîtra dès ta 2ᵉ pesée, sur un autre jour.</div>':'');
   var chips=h.length?'<div class="chips">'+h.slice(-6).reverse().map(function(x){return '<span class="chip">'+dshort(x.d)+' · '+fmt(x.kg)+' kg<button class="cdel" data-a="bwdel" data-d="'+x.d+'" aria-label="Supprimer la pesée du '+dshort(x.d)+'">×</button></span>'}).join("")+'</div>':'';
   return '<section class="card" aria-label="Poids de corps"><span class="label">Poids de corps</span>'+
     '<div class="bw"><input id="bw" inputmode="decimal" aria-label="Poids de corps en kg" value="'+fmt(S.bw)+'"><span>kg</span><button class="btn ghost" data-a="bw">Enregistrer</button></div>'+info+ch+chips+'</section>';
